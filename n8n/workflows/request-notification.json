@@ -1,0 +1,112 @@
+{
+  "name": "LendLoop — 1. Borrow Request & Status Notification (HMAC Verified)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-borrow-event",
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "b1f2c3d4-0001-4000-8000-000000000001",
+      "name": "Convex Borrow Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "lendloop-borrow-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.LENDLOOP_WEBHOOK_SECRET;\nif (!secret) throw new Error('Missing LENDLOOP_WEBHOOK_SECRET in n8n environment');\n\nconst item = $input.first();\nconst sigHeader = item.json.headers?.['x-lendloop-signature'] || '';\nconst rawBody = JSON.stringify(item.json.body);\n\nconst parts = Object.fromEntries(sigHeader.split(',').map(p => p.trim().split('=')));\nconst ts = Number(parts.t);\nconst v1 = parts.v1 || '';\nconst now = Math.floor(Date.now() / 1000);\n\nif (!Number.isFinite(ts) || Math.abs(now - ts) > 300) {\n  throw new Error('Rejected webhook: Invalid or expired timestamp');\n}\n\nconst expected = crypto.createHmac('sha256', secret).update(`${ts}.${rawBody}`, 'utf8').digest('hex');\nconst a = Buffer.from(v1, 'hex');\nconst b = Buffer.from(expected, 'hex');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {\n  throw new Error('Rejected webhook: HMAC signature verification failed');\n}\n\n// Data minimization: pass only required notification fields downstream\nconst bObj = item.json.body;\nreturn [{\n  json: {\n    eventId: bObj.eventId,\n    eventType: bObj.eventType,\n    requestId: bObj.requestId,\n    toolName: bObj.toolName,\n    recipientEmail: bObj.recipientEmail,\n    recipientRole: bObj.recipientRole,\n    startDate: bObj.startDate,\n    endDate: bObj.endDate\n  }\n}];"
+      },
+      "id": "b1f2c3d4-0001-4000-8000-000000000002",
+      "name": "Verify HMAC & Minimize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first().json;\nconst message = `[LendLoop Notification] To ${item.recipientEmail} (${item.recipientRole}): ${item.eventType} for \"${item.toolName}\" (${item.startDate} to ${item.endDate})`;\nconsole.log(message);\n\nconst callbackPayload = JSON.stringify({\n  idempotencyKey: item.eventId,\n  requestId: item.requestId,\n  workflowType: 'request_notification',\n  summary: `Notification sent: ${item.eventType} (${new Date().toISOString().slice(0, 10)})`,\n  status: 'delivered'\n});\nconst ts = Math.floor(Date.now() / 1000);\nconst mac = crypto.createHmac('sha256', $env.LENDLOOP_WEBHOOK_SECRET).update(`${ts}.${callbackPayload}`, 'utf8').digest('hex');\n\nreturn [{\n  json: {\n    callbackPayload,\n    signatureHeader: `t=${ts},v1=${mac}`\n  }\n}];"
+      },
+      "id": "b1f2c3d4-0001-4000-8000-000000000003",
+      "name": "Dispatch Notification & Sign Write-Back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_HTTP_URL + '/api/automation-callback' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signatureHeader }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.callbackPayload }}",
+        "options": {}
+      },
+      "id": "b1f2c3d4-0001-4000-8000-000000000004",
+      "name": "Idempotent Write-Back to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Convex Borrow Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC & Minimize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC & Minimize Payload": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Notification & Sign Write-Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Notification & Sign Write-Back": {
+      "main": [
+        [
+          {
+            "node": "Idempotent Write-Back to Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "lendloop-error-handler"
+  }
+}

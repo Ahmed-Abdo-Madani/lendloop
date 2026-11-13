@@ -1,0 +1,33 @@
+{
+  "name": "lendloop",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Ahmed Abdo Madani <toni91994@gmail.com> (https://github.com/Ahmed-Abdo-Madani)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ahmed-Abdo-Madani/lendloop.git"
+  },
+  "description": "LendLoop — Neighborhood tool-lending board with Clerk auth, Convex RBAC, and HMAC-secured n8n workflow automation",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.12.0",
+    "convex": "^1.21.0",
+    "lucide-react": "^0.475.0",
+    "next": "^15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}

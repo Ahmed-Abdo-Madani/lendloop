@@ -1,0 +1,39 @@
+{
+  "name": "LendLoop — 3. Automation Error Workflow (Visible Failure Alerting)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d3f4e5a6-0003-4000-8000-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconsole.error('[LendLoop Automation Alert] Workflow failed after retries:', JSON.stringify({\n  workflowName: err.workflow?.name,\n  executionId: err.execution?.id,\n  errorMessage: err.execution?.error?.message,\n  lastNodeExecuted: err.execution?.lastNodeExecuted,\n  timestamp: new Date().toISOString()\n}));\nreturn $input.all();"
+      },
+      "id": "d3f4e5a6-0003-4000-8000-000000000002",
+      "name": "Log Structured Incident & Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Structured Incident & Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
